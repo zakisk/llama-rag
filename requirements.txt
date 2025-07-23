@@ -1,0 +1,1 @@
+llama_stack_client==0.2.15

@@ -1,0 +1,10 @@
+# Byte-compiled files
+__pycache__/
+*.py[cod]
+
+# Virtual environment
+llama_env/
+
+# Logs and temporary files
+*.log
+*.tmp

@@ -1,0 +1,78 @@
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  generateName: demo-pipelinerun-
+spec:
+  params:
+    - name: git-url
+      value: "https://github.com/zakisk/pac-demo"
+    - name: image-url
+      value: "gcr.io/your-project/pac-demo"
+  pipelineSpec:
+    params:
+      - name: git-url
+        type: string
+      - name: image-url
+        type: string
+    workspaces:
+      - name: shared-workspace
+    tasks:
+      - name: clone-repo
+        taskSpec:
+          params:
+            - name: git-url
+              type: string
+          workspaces:
+            - name: output
+          steps:
+            - name: clone
+              image: alpine/git
+              script: |
+                git clone $(params.git-url) .
+              workingDir: $(workspaces.output.path)
+        workspaces:
+          - name: output
+            workspace: shared-workspace
+      - name: run-tests
+        runAfter: ["clone-repo"]
+        taskSpec:
+          workspaces:
+            - name: source
+          steps:
+            - name: test
+              image: golang:1.21
+              script: |
+                go test ./...
+              workingDir: $(workspaces.source.path)
+        workspaces:
+          - name: source
+            workspace: shared-workspace
+      - name: build-image
+        runAfter: ["run-tests"]
+        taskSpec:
+          params:
+            - name: image-url
+              type: string
+          workspaces:
+            - name: source
+          steps:
+            - name: build-and-push
+              image: quay.io/buildah/stable:v1.33.1
+              securityContext:
+                privileged: true
+              script: |
+                buildah bud --tag $(params.image-url) .
+                buildah push $(params.image-url) docker://$(params.image-url)
+              workingDir: $(workspaces.source.path)
+        workspaces:
+          - name: source
+            workspace: shared-workspace
+  workspaces:
+    - name: shared-workspace
+      volumeClaimTemplate:
+        spec:
+          accessModes:
+            - ReadWriteOnce
+          resources:
+            requests:
+              storage: 1Gi
