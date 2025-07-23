@@ -1,13 +1,15 @@
 apiVersion: tekton.dev/v1
 kind: PipelineRun
 metadata:
-  generateName: demo-pipelinerun-
+  generateName: pr-run-
+  annotations:
+    pipelinesascode.tekton.dev/on-cel-expression: 'event == "pull_request" && target_branch == "main"'
 spec:
   params:
     - name: git-url
-      value: "https://github.com/zakisk/pac-demo"
+      value: '{{ source_url }}'
     - name: image-url
-      value: "gcr.io/your-project/pac-demo"
+      value: 'quay.io/user/repo:{{ revision }}'
   pipelineSpec:
     params:
       - name: git-url
@@ -15,60 +17,68 @@ spec:
       - name: image-url
         type: string
     workspaces:
-      - name: shared-workspace
+      - name: source
     tasks:
-      - name: clone-repo
+      - name: clone
+        params:
+          - name: url
+            value: $(params.git-url)
+        workspaces:
+          - name: output
+            workspace: source
         taskSpec:
           params:
-            - name: git-url
+            - name: url
               type: string
           workspaces:
             - name: output
           steps:
-            - name: clone
-              image: alpine/git
+            - name: clone-repo
+              image: alpine/git:v2.43.0
               script: |
-                git clone $(params.git-url) .
+                git clone $(params.url) .
               workingDir: $(workspaces.output.path)
+
+      - name: test
+        runAfter: [clone]
         workspaces:
-          - name: output
-            workspace: shared-workspace
-      - name: run-tests
-        runAfter: ["clone-repo"]
+          - name: source
+            workspace: source
         taskSpec:
           workspaces:
             - name: source
           steps:
-            - name: test
-              image: golang:1.21
+            - name: run-tests
+              image: golang:1.21-alpine
               script: |
                 go test ./...
               workingDir: $(workspaces.source.path)
+
+      - name: build
+        runAfter: [test]
+        params:
+          - name: image
+            value: $(params.image-url)
         workspaces:
           - name: source
-            workspace: shared-workspace
-      - name: build-image
-        runAfter: ["run-tests"]
+            workspace: source
         taskSpec:
           params:
-            - name: image-url
+            - name: image
               type: string
           workspaces:
             - name: source
           steps:
-            - name: build-and-push
-              image: quay.io/buildah/stable:v1.33.1
-              securityContext:
-                privileged: true
-              script: |
-                buildah bud --tag $(params.image-url) .
-                buildah push $(params.image-url) docker://$(params.image-url)
+            - name: build-and-push-image
+              image: quay.io/buildah/stable:v1.35.4
               workingDir: $(workspaces.source.path)
-        workspaces:
-          - name: source
-            workspace: shared-workspace
+              script: |
+                buildah bud -f Dockerfile -t $(params.image) .
+                buildah push $(params.image) docker://$(params.image)
+              securityContext:
+                runAsUser: 0
   workspaces:
-    - name: shared-workspace
+    - name: source
       volumeClaimTemplate:
         spec:
           accessModes:

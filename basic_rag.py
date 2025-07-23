@@ -28,7 +28,7 @@ response = client.vector_dbs.register(
 # Directories to ingest
 DOC_DIRS = [
     "/home/zashaikh/go-projects/pipeline/docs",
-    "/home/zashaikh/go-projects/pipelines-as-code/docs",
+    "/home/zashaikh/go-projects/pipelines-as-code/docs/content",
 ]
 
 
@@ -154,7 +154,9 @@ session_id = rag_agent.create_session("test-session")
 user_prompts = [
     (
         "Create a Tekton PipelineRun (ONLY the PipelineRun resource, no separate Task or Pipeline objects) that:\n"
-        "• Clones the repository https://github.com/zakisk/pac-demo.\n"
+        "Retrieve any necessary details from the docs via knowledge_search before answering."
+        "• Make PipelineRun targeted for pull request event and target branch is main using CEL expression\n"
+        "• Clones the repository using {{ source_url }} dynamic variable.\n"
         "• Runs the project’s tests.\n"
         "• Builds an OCI image from a Dockerfile in the repo.\n"
         "Hard requirements:\n"
@@ -164,7 +166,6 @@ user_prompts = [
         "4. Use catalog images (e.g. alpine/git, golang, buildah) that do not require private pulls.\n"
         "5. Output must be valid YAML starting with apiVersion.\n\n"
         "6. Output only the PipelineRun YAML, no other text or comments.\n"
-        "Retrieve any necessary details from the docs via knowledge_search before answering."
     )
 ]
 
